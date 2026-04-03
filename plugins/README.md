@@ -7,4 +7,5 @@ If you want to browse examples or templates, see [available-plugins](../availabl
 ## Active Plugins
 
 - [workload-type-display](workload-type-display.js): Displays the currently active workload type inline in the Salad UI.
+- [network-usage-display](network-usage-display.js): Shows live renderer upload/download rates and session transfer totals.
 - [plugin-template-core-log](../available-plugins/plugin-template-core-log.js): Starter template that shows how to build a plugin on top of `window.__saladCore.createLogReader(options)`.

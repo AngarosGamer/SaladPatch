@@ -1,5 +1,5 @@
 {
-  "name": "salad-app-injector",
+  "name": "salad-patch",
   "version": "1.0.0",
   "description": "",
   "main": "loader.js",
@@ -8,14 +8,14 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/AngarosGamer/salad-app-injector.git"
+    "url": "git+https://github.com/AngarosGamer/SaladPatch"
   },
   "keywords": [],
   "author": "",
   "license": "ISC",
   "type": "commonjs",
   "bugs": {
-    "url": "https://github.com/AngarosGamer/salad-app-injector/issues"
+    "url": "https://github.com/AngarosGamer/SaladPatch/issues"
   },
-  "homepage": "https://github.com/AngarosGamer/salad-app-injector#readme"
+  "homepage": "https://github.com/AngarosGamer/SaladPatch#readme"
 }

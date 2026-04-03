@@ -11,6 +11,7 @@ set "GITHUB_REPO_OWNER=AngarosGamer"
 set "GITHUB_REPO_NAME=SaladPatch"
 set "GITHUB_BRANCH=main"
 set "GITHUB_RAW_PACKAGE_URL=https://raw.githubusercontent.com/%GITHUB_REPO_OWNER%/%GITHUB_REPO_NAME%/%GITHUB_BRANCH%/package.json"
+set "UPDATE_AVAILABLE=0"
 
 echo ================================================
 echo   Salad Injector Launcher
@@ -26,6 +27,12 @@ call :ensure_node
 if errorlevel 1 goto :end
 
 call :check_for_update
+if "!UPDATE_AVAILABLE!"=="1" (
+	echo.
+	echo [ACTION REQUIRED] A newer SaladPatch version is available.
+	echo Please update from: https://github.com/%GITHUB_REPO_OWNER%/%GITHUB_REPO_NAME%
+	call :confirm "Continue anyway with current version?" || goto :end
+)
 
 call :ensure_npm_package "puppeteer-core"
 if errorlevel 1 goto :end
@@ -126,6 +133,7 @@ popd >nul
 exit /b 0
 
 :check_for_update
+set "UPDATE_AVAILABLE=0"
 set "CURRENT_VERSION="
 for /f "delims=" %%V in ('node -p "require('./package.json').version" 2^>nul') do set "CURRENT_VERSION=%%V"
 
@@ -155,12 +163,17 @@ powershell -NoProfile -ExecutionPolicy Bypass -Command ^
 	"    Write-Host ('         Current: ' + $localVersion);" ^
 	"    Write-Host ('         Latest:  ' + $remoteVersion);" ^
 	"    Write-Host ('         Repo:    https://github.com/%GITHUB_REPO_OWNER%/%GITHUB_REPO_NAME%');" ^
+	"    exit 2;" ^
 	"  } else {" ^
 	"    Write-Host ('[OK] You are running the latest version (' + $localVersion + ').');" ^
+	"    exit 0;" ^
 	"  }" ^
 	"} catch {" ^
 	"  Write-Host ('[WARN] Update check skipped: ' + $_.Exception.Message);" ^
+	"  exit 0;" ^
 	"}"
+
+if errorlevel 2 set "UPDATE_AVAILABLE=1"
 
 exit /b 0
 

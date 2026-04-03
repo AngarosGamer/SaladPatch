@@ -280,7 +280,7 @@
         }
 
         if (!state.shortcutRegistered && typeof window.__saladCoreDebug.registerToggleShortcut === 'function') {
-            window.__saladCoreDebug.registerToggleShortcut(DEBUG_PANEL_ID, { ctrlKey: true, key: 'd' });
+            window.__saladCoreDebug.registerToggleShortcut(DEBUG_PANEL_ID, { ctrlKey: true, key: 't' });
             state.shortcutRegistered = true;
         }
 
@@ -294,7 +294,7 @@
         }
 
         const lines = [
-            'Workload Type Display Debug (Ctrl+D toggles)',
+            'Workload Type Display Debug (Ctrl+T toggles)',
             `Status: ${state.lastEvent}`,
             `Log file: ${state.currentFile || '(none)'}`,
             `Offset: ${state.currentOffset}`,

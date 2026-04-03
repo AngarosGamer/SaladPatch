@@ -1,8 +1,10 @@
 const fs = require('fs');
 const path = require('path');
+const crypto = require('crypto');
 const puppeteer = require('puppeteer-core');
 const { createLogReader } = require('./core/log-reader');
 const { ensureCoreDebugWindowApi } = require('./core/debug-window');
+const { createProcessIoMonitor } = require('./core/process-io-monitor');
 
 const DEBUG_PORT = process.env.DEBUG_PORT || '9222';
 const DEBUG_URL = `http://localhost:${DEBUG_PORT}`;
@@ -140,6 +142,14 @@ async function ensureCoreApiFacade(page) {
                     }
                     return window.__saladCoreLogPoll();
                 }
+            },
+            processIo: {
+                poll: async () => {
+                    if (typeof window.__saladCoreProcessIoPoll !== 'function') {
+                        throw new Error('__saladCoreProcessIoPoll is not available yet');
+                    }
+                    return window.__saladCoreProcessIoPoll();
+                }
             }
         };
 
@@ -153,13 +163,15 @@ async function ensureCoreApiFacade(page) {
     });
 }
 
-async function ensureCoreApis(page, logReader) {
+async function ensureCoreApis(page, logReader, processIoMonitor) {
     if (coreApisExposedPages.has(page)) {
         return;
     }
 
     try {
         await exposeFunctionIfNeeded(page, '__saladCoreLogPoll', async () => logReader.poll());
+        await exposeFunctionIfNeeded(page, '__saladCoreProcessIoPoll', async () => processIoMonitor.poll());
+        await exposeFunctionIfNeeded(page, '__saladCoreEmitLog', async () => true);
         await exposeFunctionIfNeeded(page, '__saladCoreCreateLogReader', async (options) => createManagedReader(options));
         await exposeFunctionIfNeeded(page, '__saladCorePollLogReader', async (id) => pollManagedReader(id));
         await exposeFunctionIfNeeded(page, '__saladCoreDisposeLogReader', async (id) => disposeManagedReader(id));
@@ -508,7 +520,7 @@ async function ensureMainPage(browser, currentPage) {
 }
 
 function createContentHash(code) {
-    return require('crypto').createHash('sha1').update(code, 'utf8').digest('hex');
+    return crypto.createHash('sha1').update(code, 'utf8').digest('hex');
 }
 
 async function main() {
@@ -524,6 +536,7 @@ async function main() {
         initialTailBytes: LOG_READER_INITIAL_TAIL_BYTES,
         maxRecentLines: 100
     });
+    const processIoMonitor = createProcessIoMonitor();
 
     browser.on('disconnected', () => {
         console.log('[WARN] Debug browser disconnected. Waiting for reconnect...');
@@ -554,7 +567,7 @@ async function main() {
                 lastAttachedTarget = attachKey;
             }
 
-            await ensureCoreApis(page, logReader);
+            await ensureCoreApis(page, logReader, processIoMonitor);
 
             const normalizedBundle = {
                 ...bundle,
