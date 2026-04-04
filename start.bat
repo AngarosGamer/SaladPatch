@@ -13,6 +13,8 @@ set "GITHUB_BRANCH=main"
 set "GITHUB_RAW_PACKAGE_URL=https://raw.githubusercontent.com/%GITHUB_REPO_OWNER%/%GITHUB_REPO_NAME%/%GITHUB_BRANCH%/package.json"
 set "UPDATE_AVAILABLE=0"
 
+if defined SALAD_DEBUG_PORT set "DEFAULT_DEBUG_PORT=%SALAD_DEBUG_PORT%"
+
 echo ================================================
 echo   Salad Injector Launcher
 echo ================================================
@@ -31,7 +33,11 @@ if "!UPDATE_AVAILABLE!"=="1" (
 	echo.
 	echo [ACTION REQUIRED] A newer SaladPatch version is available.
 	echo Please update from: https://github.com/%GITHUB_REPO_OWNER%/%GITHUB_REPO_NAME%
-	call :confirm "Continue anyway with current version?" || goto :end
+	if /I "%AUTO_CONTINUE_ON_UPDATE%"=="1" (
+		echo [INFO] AUTO_CONTINUE_ON_UPDATE=1, continuing with current version.
+	) else (
+		call :confirm "Continue anyway with current version?" || goto :end
+	)
 )
 
 call :ensure_npm_package "puppeteer-core"
@@ -42,7 +48,11 @@ echo Ready to launch Salad with remote debugging on port %DEBUG_PORT%.
 
 echo.
 echo Starting: "%SALAD_EXE%" --remote-debugging-port=%DEBUG_PORT%
-start "Salad" "%SALAD_EXE%" --remote-debugging-port=%DEBUG_PORT%
+powershell -NoProfile -ExecutionPolicy Bypass -Command "$p = Start-Process -FilePath '%SALAD_EXE%' -ArgumentList '--remote-debugging-port=%DEBUG_PORT%' -PassThru; if ($env:SALAD_PID_FILE) { Set-Content -Path $env:SALAD_PID_FILE -Value $p.Id -Encoding ASCII }"
+if errorlevel 1 (
+	echo [ERROR] Failed to start Salad.
+	exit /b 1
+)
 
 echo.
 echo Waiting for Salad to be ready on port %DEBUG_PORT%...
@@ -103,7 +113,7 @@ if not defined NPM_CMD (
 if not exist "%PROJECT_DIR%package.json" (
 	echo No package.json found. Initializing npm project...
 
-	"%NPM_CMD%" init -y
+	call "%NPM_CMD%" init -y
 	if errorlevel 1 (
 		popd >nul
 		echo [ERROR] npm init failed.
@@ -121,7 +131,7 @@ if not errorlevel 1 (
 
 echo npm package missing. Installing %PACKAGE_NAME%...
 
-"%NPM_CMD%" install "%PACKAGE_NAME%" --no-fund --no-audit --ignore-scripts
+call "%NPM_CMD%" install "%PACKAGE_NAME%" --no-fund --no-audit --ignore-scripts
 if errorlevel 1 (
 	popd >nul
 	echo [ERROR] npm install %PACKAGE_NAME% failed.
@@ -270,7 +280,8 @@ powershell -NoProfile -ExecutionPolicy Bypass -Command "Start-Process -FilePath 
 exit /b %errorlevel%
 
 :end
+set "EXIT_CODE=%ERRORLEVEL%"
 echo.
 echo Exiting launcher.
-pause
-endlocal
+if /I not "%LAUNCHER_NO_PAUSE%"=="1" pause
+endlocal & exit /b %EXIT_CODE%

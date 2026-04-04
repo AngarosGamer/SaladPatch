@@ -1,10 +1,11 @@
 {
   "name": "salad-patch",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "description": "Community-driven patching tool for custom plugins and themes in the Salad app.",
   "main": "loader.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "build:installer": "installer\\build-installer.bat"
   },
   "repository": {
     "type": "git",

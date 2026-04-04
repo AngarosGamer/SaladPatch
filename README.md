@@ -4,6 +4,33 @@
 SaladPatch is a community-driven injector tool which allows community members of the Salad Application to develop and use their own custom themes and plugins directly within the Salad App!
 </p>
 
+## Easy Install (No Development Setup)
+
+If you just want to run SaladPatch and use existing plugins/themes:
+
+1. Download the latest `SaladPatch-Setup-vX.Y.Z.exe` from Releases.
+2. Run the installer.
+3. Launch SaladPatch from the Windows Start Menu by searching for `SaladPatch`.
+
+The installer places files in `C:\Users\USER\AppData\Local\SaladPatch` and creates Start Menu shortcuts.
+
+### Where Plugins/Themes Are Stored
+
+- Active plugins: `C:\Users\USER\AppData\Local\SaladPatch\plugins`
+- Active themes: `C:\Users\USER\AppData\Local\SaladPatch\themes`
+- Optional plugin library: `C:\Users\USER\AppData\Local\SaladPatch\available-plugins`
+- Optional theme library: `C:\Users\USER\AppData\Local\SaladPatch\available-themes`
+
+Users can manually add/remove files in those folders to change behavior dynamically.
+
+## Building the Installer EXE (Maintainers)
+
+The repository includes an Inno Setup installer configuration at `installer/SaladPatch.iss`.
+
+1. Install Inno Setup 6.
+2. Run `npm run build:installer`.
+3. The output installer EXE is generated in `dist/`.
+
 ## Design Philosophy
 - Make code legible and easy to review.
 - Keep plugins focused: one concern per plugin where possible.
