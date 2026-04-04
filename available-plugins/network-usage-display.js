@@ -1,14 +1,17 @@
-(() => {
-    if (window.__networkUsageDisplayPlugin__) {
-        return;
-    }
-    window.__networkUsageDisplayPlugin__ = true;
+/**
+ * Network Usage Display Plugin
+ * 
+ * Shows live network metrics, process I/O stats, and updates the performance panel.
+ * Uses createPlugin() with helpers for automatic cleanup of intervals and listeners.
+ */
+
+(async () => {
+    await createPlugin('network-usage-display', async (h) => {
 
     const PANEL_ID = 'network-usage-display-panel';
     const PERF_WIDGET_ID = 'network-usage-performance-widget';
     const POLL_INTERVAL_MS = 1000;
     const DEBUG_SHORTCUT_KEY = 'n';
-    const SCRIPT_KEY = window.__saladScriptContext ? window.__saladScriptContext.key : 'network-usage-display';
     const DEBUG_LOG_EVERY_MS = 5000;
 
     const state = {
@@ -22,12 +25,10 @@
         usingProcessMetrics: false,
         warnedMissingProcessApi: false,
         debugVisible: false,
-        shortcutAttached: false,
         perfCardNodes: null,
         lastDebugLogAt: 0,
         lastResourceIndex: 0,
         samples: [],
-        intervalId: null,
         originalFetch: null,
         originalXhrSend: null,
         originalWebSocket: null
@@ -255,6 +256,7 @@
         });
 
         document.body.appendChild(panel);
+        h.useDOM(panel); // Auto-cleanup on removal
         logDebug('created panel');
         return panel;
     }
@@ -378,6 +380,7 @@
         };
 
         placeWidgetBeforeControls(widget, host);
+        h.useDOM(widget); // Auto-cleanup on removal
         return widget;
     }
 
@@ -564,55 +567,32 @@
 
     function cleanup() {
         logDebug('cleanup start');
-        if (state.intervalId) {
-            clearInterval(state.intervalId);
-            state.intervalId = null;
-        }
-
         unpatchNetworking();
-
-        const panel = document.getElementById(PANEL_ID);
-        if (panel) {
-            panel.remove();
-        }
-
-        const perfWidget = document.getElementById(PERF_WIDGET_ID);
-        if (perfWidget) {
-            perfWidget.remove();
-        }
-        state.perfCardNodes = null;
-
-        if (state.shortcutAttached) {
-            window.removeEventListener('keydown', onDebugShortcut, true);
-            state.shortcutAttached = false;
-        }
-
-        if (window.__saladScripts && typeof window.__saladScripts.unregisterCleanup === 'function') {
-            window.__saladScripts.unregisterCleanup(SCRIPT_KEY);
-        }
-
         logDebug('cleanup complete');
     }
 
-    function start() {
-        logDebug('start', { scriptKey: SCRIPT_KEY, pollIntervalMs: POLL_INTERVAL_MS });
-        if (window.__saladScripts && typeof window.__saladScripts.registerCleanup === 'function') {
-            window.__saladScripts.registerCleanup(SCRIPT_KEY, cleanup);
-        }
+    // Initialize
+    logDebug('start', { pollIntervalMs: POLL_INTERVAL_MS });
 
-        if (!state.shortcutAttached) {
-            window.addEventListener('keydown', onDebugShortcut, true);
-            state.shortcutAttached = true;
-        }
+    // Attach debug shortcut (auto-cleaned by helper)
+    h.useListener(document, 'keydown', onDebugShortcut, true);
 
-        patchNetworking();
-        tick();
-        state.intervalId = window.setInterval(() => {
-            tick().catch(() => {});
-        }, POLL_INTERVAL_MS);
+    // Patch global APIs (need to unpatch manually in cleanup)
+    patchNetworking();
 
-        window.addEventListener('beforeunload', cleanup);
+    // Initial tick
+    await tick();
+
+    // Set up polling interval (auto-cleared by helper)
+    h.useInterval(() => {
+        tick().catch(() => {});
+    }, POLL_INTERVAL_MS);
+
+    // Register manual cleanup for global API patches
+    // (This happens when plugin is removed/reloaded via createPlugin factory)
+    const originalRegisterCleanup = window.__saladScripts?.registerCleanup;
+    if (originalRegisterCleanup) {
+        originalRegisterCleanup('network-usage-display', cleanup);
     }
-
-    start();
-})();
+    });
+})().catch(err => console.error('[network-usage-display] Error:', err));

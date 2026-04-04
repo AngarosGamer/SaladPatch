@@ -1,8 +1,13 @@
-(() => {
-    if (window.__workloadTypeDisplayPlugin__) {
-        return;
-    }
-    window.__workloadTypeDisplayPlugin__ = true;
+/**
+ * Workload Type Display Plugin
+ * 
+ * Monitors Salad logs for active workload types (Container, Miner, Node Compatibility)
+ * and displays them inline in the Salad UI.
+ * Uses createPlugin() for automatic lifecycle management.
+ */
+
+(async () => {
+    await createPlugin('workload-type-display', async (h) => {
 
     const POLL_INTERVAL_MS = 1200; // Poll logs
     const DEBUG_PANEL_ID = 'workload-type-display-debug';
@@ -447,4 +452,5 @@
     }
 
     start();
-})();
+    });
+})().catch(err => console.error('Plugin error:', err));

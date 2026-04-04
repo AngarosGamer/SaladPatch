@@ -5,6 +5,9 @@ const puppeteer = require('puppeteer-core');
 const { createLogReader } = require('./core/log-reader');
 const { ensureCoreDebugWindowApi } = require('./core/debug-window');
 const { createProcessIoMonitor } = require('./core/process-io-monitor');
+const exposePluginHelpers = require('./core/plugin-helpers');
+const exposePluginFactory = require('./core/plugin-factory');
+const exposeCoreDebugSystem = require('./core/core-debug');
 
 const DEBUG_PORT = process.env.DEBUG_PORT || '9222';
 const DEBUG_URL = `http://localhost:${DEBUG_PORT}`;
@@ -177,14 +180,20 @@ async function ensureCoreApis(page, logReader, processIoMonitor) {
         await exposeFunctionIfNeeded(page, '__saladCoreDisposeLogReader', async (id) => disposeManagedReader(id));
         await ensureCoreDebugWindowApi(page);
         await ensureCoreApiFacade(page);
+        await exposeCoreDebugSystem(page);
+        await exposePluginHelpers(page);
+        await exposePluginFactory(page);
         coreApisExposedPages.add(page);
-        console.log('[+] Exposed core APIs: __saladCore + __saladCoreDebug (+ legacy bridges)');
+        console.log('[+] Exposed core APIs: __saladCore + __saladCoreDebug + __saladCoreLoaderDebug + __saladPluginHelpers (+ createPlugin)');
     } catch (err) {
         const msg = getErrorMessage(err);
 
         if (msg.includes('already exists')) {
             await ensureCoreDebugWindowApi(page);
             await ensureCoreApiFacade(page);
+            await exposeCoreDebugSystem(page);
+            await exposePluginHelpers(page);
+            await exposePluginFactory(page);
             coreApisExposedPages.add(page);
             return;
         }
@@ -432,6 +441,30 @@ async function inject(page, bundle) {
 
         return { applied, skipped, failed, removed };
     }, bundle);
+
+    // Log injection results to core debug console
+    if (typeof page.evaluate === 'function') {
+        try {
+            await page.evaluate((stats) => {
+                if (window.__saladCoreLoaderDebug) {
+                    const pluginCount = stats.applied.length + stats.skipped.length;
+                    const failedCount = stats.failed.length;
+                    window.__saladCoreLoaderDebug.updatePluginStats(pluginCount, pluginCount - failedCount, failedCount);
+
+                    if (stats.applied.length > 0) {
+                        window.__saladCoreLoaderDebug.logEvent('INJECT', `Applied ${stats.applied.length} script(s)`, stats.applied.join(', '));
+                    }
+                    if (stats.failed.length > 0) {
+                        for (const failure of stats.failed) {
+                            window.__saladCoreLoaderDebug.logError(`${failure.fileName} failed`, failure.message);
+                        }
+                    }
+                }
+            }, result);
+        } catch (e) {
+            // Debug console not available yet, safe to ignore
+        }
+    }
 
     if (result.applied.length > 0) {
         console.log(`[+] Applied ${result.applied.length} script(s): ${result.applied.join(', ')}`);

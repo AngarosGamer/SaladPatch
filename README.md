@@ -27,21 +27,71 @@ SaladPatch is a community-driven injector tool which allows community members of
 ## Documentation
 - Function-level core API docs: [docs/README.md](docs/README.md)
 
-## Example Plugin Pattern
-1. Poll `window.__saladCoreLogPoll()` for new lines.
-2. Parse only what your plugin needs.
-3. Apply minimal UI changes.
-4. Use `window.__saladCoreDebug` for optional diagnostics.
+## 🚀 Plugin Quickstart (Easy Way)
 
-## Plugin Quickstart
+**Using `createPlugin()` — Automatic cleanup, no boilerplate!**
+
+```js
+(async () => {
+    await createPlugin('my-plugin', async (h) => {
+        const reader = await h.createLogReader();
+        
+        h.useInterval(async () => {
+            const snapshot = await reader.poll();
+            for (const line of snapshot.lines) {
+                if (/pattern/.test(line)) {
+                    console.log(line);
+                }
+            }
+        }, 1500);
+    });
+})().catch(err => console.error('Plugin error:', err));
+```
+
+**Done!** Everything cleans up automatically when the plugin is removed.
+
+See [docs/api/createPlugin.md](docs/api/createPlugin.md) for full reference with all helpers.
+
+## 🐛 Debugging
+
+**Core System Debug Console** (Press `Ctrl+D`):
+
+Monitor loader health, plugin injection statistics, and system errors with the built-in debug console:
+
+```js
+// Manually toggle (optional — Ctrl+D works automatically)
+window.__saladCoreLoaderDebug.toggle();
+
+// Log custom events to debug panel
+window.__saladCoreLoaderDebug.logEvent('MY_EVENT', 'Something happened', details);
+
+// Check visibility
+if (window.__saladCoreLoaderDebug.isVisible()) {
+    console.log('Debug panel is open');
+}
+```
+
+See [docs/api/__saladCoreLoaderDebug.md](docs/api/__saladCoreLoaderDebug.md) for full reference.
+
+**Plugin Debug Console** (Press `Ctrl+Shift+D`):
+
+Each plugin can render its own debug overlay. See [docs/api/__saladCoreDebug.md](docs/api/__saladCoreDebug.md) for per-plugin debug panel setup.
+
+## Legacy Plugin Pattern (Advanced)
+
 1. Copy `available-plugins/plugin-template-core-log.js` into `plugins/` and rename it.
 2. Replace `handleLine()` with your own plugin-specific parsing logic.
-3. Prefer `window.__saladCore.createLogReader(options)` for new plugins.
-4. If your plugin owns timers or UI changes, register cleanup with `window.__saladScripts.registerCleanup()`.
-5. Keep broad reusable logic in core and plugin behavior in plugin files.
+3. Use `window.__saladCore.createLogReader(options)` for log access.
+4. Register cleanup with `window.__saladScripts.registerCleanup()`.
+5. Keep reusable logic in core and plugin-specific code in the plugin.
 
 
-### 👐 Contributing
+### ⚠️ Disclaimers
 
-> [!NOTE]<br>
-> Contributing is open to anyone, but the approval of any pull request remains at the charge of code owners. Your contribution, if it does not meet the requirements, may be rejected.
+> [!CAUTION]<br>
+> Running SaladPatch is not without risks! While we try our best to verify that patches are secure, running external scripts from the internet is ALWAYS a security risk.
+> Use at your own risk.
+
+> [!WARNING]<br>
+> SaladPatch is in no way affiliated or endorsed by SaladTechnologies. As stated officially by their team, they do not recommend running this program.
+> Scripts may cause issues with the Salad App, we make no guarantee concerning the stability of the app while running SaladPatch.

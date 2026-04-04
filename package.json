@@ -1,7 +1,7 @@
 {
   "name": "salad-patch",
-  "version": "1.0.0",
-  "description": "",
+  "version": "1.0.1",
+  "description": "Community-driven patching tool for custom plugins and themes in the Salad app.",
   "main": "loader.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1"
@@ -10,8 +10,15 @@
     "type": "git",
     "url": "git+https://github.com/AngarosGamer/SaladPatch"
   },
-  "keywords": [],
-  "author": "",
+  "keywords": [
+    "salad",
+    "injector",
+    "plugin",
+    "theme",
+    "customization",
+    "community"
+  ],
+  "author": "Angaros",
   "license": "ISC",
   "type": "commonjs",
   "bugs": {
