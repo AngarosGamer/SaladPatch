@@ -31,6 +31,7 @@ Name: "english"; MessagesFile: "compiler:Default.isl"
 
 [Tasks]
 Name: "desktopicon"; Description: "Create a desktop shortcut"; GroupDescription: "Additional shortcuts:"; Flags: unchecked
+Name: "installnode"; Description: "Install Node.js LTS (recommended if not bundled)"; GroupDescription: "Dependencies:"; Flags: unchecked
 
 [Files]
 Source: "..\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs; Excludes: ".git\*,node_modules\*,dist\*,installer\*,*.log"
@@ -42,4 +43,5 @@ Name: "{userprograms}\SaladPatch\Open SaladPatch Folder"; Filename: "{app}"
 Name: "{userdesktop}\SaladPatch"; Filename: "{app}\SaladPatchLauncher.exe"; WorkingDir: "{app}"; Tasks: desktopicon
 
 [Run]
+Filename: "powershell.exe"; Parameters: "-NoProfile -ExecutionPolicy Bypass -File ""{app}\install-node.ps1"""; Description: "Install Node.js LTS"; Flags: postinstall waituntilterminated skipifsilent; Tasks: installnode
 Filename: "{app}\SaladPatchLauncher.exe"; Description: "Launch SaladPatch now"; Flags: postinstall shellexec skipifsilent unchecked

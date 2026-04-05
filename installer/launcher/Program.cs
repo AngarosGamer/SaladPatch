@@ -431,6 +431,7 @@ internal sealed class LauncherForm : Form
             psi.EnvironmentVariables["SALAD_DEBUG_PORT"] = ((int)_portInput.Value).ToString();
             psi.EnvironmentVariables["LAUNCHER_NO_PAUSE"] = "1";
             psi.EnvironmentVariables["AUTO_CONTINUE_ON_UPDATE"] = "1";
+            psi.EnvironmentVariables["AUTO_INSTALL_DEPENDENCIES"] = "1";
             psi.EnvironmentVariables["SALAD_PID_FILE"] = _saladPidPath;
 
             _launcherProcess = new Process { StartInfo = psi, EnableRaisingEvents = true };

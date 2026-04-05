@@ -1,6 +1,6 @@
 {
   "name": "salad-patch",
-  "version": "1.0.2",
+  "version": "1.0.3",
   "description": "Community-driven patching tool for custom plugins and themes in the Salad app.",
   "main": "loader.js",
   "scripts": {
