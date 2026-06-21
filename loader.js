@@ -1,6 +1,7 @@
 const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
+const http = require('http');
 const puppeteer = require('puppeteer-core');
 const { createLogReader } = require('./core/log-reader');
 const { ensureCoreDebugWindowApi } = require('./core/debug-window');
@@ -10,7 +11,8 @@ const exposePluginFactory = require('./core/plugin-factory');
 const exposeCoreDebugSystem = require('./core/core-debug');
 
 const DEBUG_PORT = process.env.DEBUG_PORT || '9222';
-const DEBUG_URL = `http://localhost:${DEBUG_PORT}`;
+const DEBUG_HOST = process.env.DEBUG_HOST || '127.0.0.1';
+const DEBUG_URL = `http://${DEBUG_HOST}:${DEBUG_PORT}`;
 const PROJECT_DIR = __dirname;
 
 const ACTIVE_PLUGIN_DIR = path.join(PROJECT_DIR, 'plugins');
@@ -29,6 +31,18 @@ const RECONNECT_INTERVAL_MS = 2000;
 const SALAD_LOG_DIR = 'C:\\ProgramData\\Salad\\logs';
 const SALAD_LOG_FILE_REGEX = /^log-\d{8}(?:[-_].+)?\.txt$/i;
 const LOG_READER_INITIAL_TAIL_BYTES = 256 * 1024;
+const API_SERVER_HOST = process.env.SALAD_API_HOST || '127.0.0.1';
+const API_SERVER_PORT = Number.isFinite(Number(process.env.SALAD_API_PORT))
+    ? Number(process.env.SALAD_API_PORT)
+    : 31337;
+const API_BASE_PATH = '/api/v1';
+const API_ENDPOINTS = new Set(['balance', 'predicted', 'history', 'status', 'state', 'degraded']);
+const DEBUG_HOSTS = Array.from(new Set([
+    process.env.DEBUG_HOST,
+    'localhost',
+    '127.0.0.1',
+    '[::1]'
+].filter(Boolean)));
 
 function sleep(ms) {
     return new Promise((resolve) => setTimeout(resolve, ms));
@@ -37,6 +51,10 @@ function sleep(ms) {
 const coreApisExposedPages = new WeakSet();
 const managedReaders = new Map();
 let managedReaderCounter = 0;
+let apiServer = null;
+let apiServerStarted = false;
+let currentApiPage = null;
+let lastApiSnapshot = null;
 
 function normalizeReaderOptions(options) {
     const raw = options && typeof options === 'object' ? options : {};
@@ -95,6 +113,209 @@ function pollManagedReader(id) {
 
 function disposeManagedReader(id) {
     return managedReaders.delete(id);
+}
+
+function sendJson(res, statusCode, payload) {
+    const body = JSON.stringify(payload);
+    res.writeHead(statusCode, {
+        'Content-Type': 'application/json; charset=utf-8',
+        'Cache-Control': 'no-store, max-age=0',
+        'Access-Control-Allow-Origin': '*',
+        'Access-Control-Allow-Methods': 'GET,HEAD,OPTIONS',
+        'Access-Control-Allow-Headers': 'Content-Type',
+        'Content-Length': Buffer.byteLength(body)
+    });
+    res.end(body);
+}
+
+async function readApiExtensionSnapshot(page) {
+    if (!page || (typeof page.isClosed === 'function' && page.isClosed())) {
+        return null;
+    }
+
+    try {
+        return await page.evaluate(() => {
+            const snapshot = window.__saladApiExtensionState;
+            if (!snapshot || typeof snapshot !== 'object') {
+                return null;
+            }
+
+            return JSON.parse(JSON.stringify(snapshot));
+        });
+    } catch (err) {
+        return null;
+    }
+}
+
+function cacheApiSnapshot(snapshot) {
+    if (!snapshot || typeof snapshot !== 'object') {
+        return null;
+    }
+
+    lastApiSnapshot = {
+        fresh: Boolean(snapshot.fresh),
+        collectedAt: typeof snapshot.collectedAt === 'string' && snapshot.collectedAt.trim()
+            ? snapshot.collectedAt.trim()
+            : new Date().toISOString(),
+        response: snapshot.response && typeof snapshot.response === 'object'
+            ? JSON.parse(JSON.stringify(snapshot.response))
+            : null
+    };
+
+    return lastApiSnapshot;
+}
+
+function getCachedApiSnapshot() {
+    if (!lastApiSnapshot || typeof lastApiSnapshot !== 'object') {
+        return null;
+    }
+
+    return {
+        fresh: false,
+        collectedAt: lastApiSnapshot.collectedAt,
+        response: lastApiSnapshot.response && typeof lastApiSnapshot.response === 'object'
+            ? JSON.parse(JSON.stringify(lastApiSnapshot.response))
+            : null,
+        disclaimer: 'Serving cached Salad API state because the widget is not visible.'
+    };
+}
+
+function normalizeApiSnapshot(snapshot) {
+    if (!snapshot || typeof snapshot !== 'object') {
+        return null;
+    }
+
+    return snapshot;
+}
+
+function buildApiIndexResponse() {
+    return {
+        ok: true,
+        endpoints: Array.from(API_ENDPOINTS),
+        basePath: API_BASE_PATH,
+        server: {
+            host: API_SERVER_HOST,
+            port: API_SERVER_PORT
+        }
+    };
+}
+
+async function handleApiRequest(req, res) {
+    try {
+        if (req.method === 'OPTIONS') {
+            res.writeHead(204, {
+                'Access-Control-Allow-Origin': '*',
+                'Access-Control-Allow-Methods': 'GET,HEAD,OPTIONS',
+                'Access-Control-Allow-Headers': 'Content-Type',
+                'Cache-Control': 'no-store, max-age=0'
+            });
+            res.end();
+            return;
+        }
+
+        if (req.method !== 'GET' && req.method !== 'HEAD') {
+            sendJson(res, 405, {
+                ok: false,
+                error: 'Method not allowed'
+            });
+            return;
+        }
+
+        const requestUrl = new URL(req.url || '/', `http://${req.headers.host || `${API_SERVER_HOST}:${API_SERVER_PORT}`}`);
+        const normalizedPath = requestUrl.pathname.replace(/^\/api/i, '');
+
+        if (normalizedPath === '' || normalizedPath === '/' || normalizedPath === '/v1' || normalizedPath === '/v1/') {
+            if (req.method === 'HEAD') {
+                res.writeHead(200, {
+                    'Content-Type': 'application/json; charset=utf-8',
+                    'Cache-Control': 'no-store, max-age=0',
+                    'Access-Control-Allow-Origin': '*'
+                });
+                res.end();
+                return;
+            }
+
+            sendJson(res, 200, buildApiIndexResponse());
+            return;
+        }
+
+        const endpoint = normalizedPath.replace(/^\/v1\/?/i, '').replace(/^\//, '');
+        if (!API_ENDPOINTS.has(endpoint)) {
+            sendJson(res, 404, {
+                ok: false,
+                error: 'Unknown endpoint',
+                available: Array.from(API_ENDPOINTS)
+            });
+            return;
+        }
+
+        const liveSnapshot = await readApiExtensionSnapshot(currentApiPage);
+        const normalized = normalizeApiSnapshot(liveSnapshot);
+        if (normalized) {
+            cacheApiSnapshot(normalized);
+        }
+
+        const effectiveSnapshot = normalized || getCachedApiSnapshot();
+        if (!effectiveSnapshot) {
+            sendJson(res, 503, {
+                ok: false,
+                error: 'API extension state is not available yet. Make sure api-extension.js is loaded in the Salad app.'
+            });
+            return;
+        }
+
+        const payload = {
+            fresh: Boolean(effectiveSnapshot.fresh),
+            collectedAt: effectiveSnapshot.collectedAt || new Date().toISOString(),
+            disclaimer: effectiveSnapshot.disclaimer,
+            response: effectiveSnapshot.response && typeof effectiveSnapshot.response === 'object'
+                ? effectiveSnapshot.response[endpoint] ?? null
+                : null
+        };
+
+        if (req.method === 'HEAD') {
+            res.writeHead(200, {
+                'Content-Type': 'application/json; charset=utf-8',
+                'Cache-Control': 'no-store, max-age=0',
+                'Access-Control-Allow-Origin': '*'
+            });
+            res.end();
+            return;
+        }
+
+        sendJson(res, 200, payload);
+    } catch (err) {
+        sendJson(res, 500, {
+            ok: false,
+            error: getErrorMessage(err)
+        });
+    }
+}
+
+async function startApiServer() {
+    if (apiServerStarted) {
+        return;
+    }
+
+    apiServer = http.createServer((req, res) => {
+        void handleApiRequest(req, res);
+    });
+
+    apiServer.on('error', (err) => {
+        console.error('[WARN] API server error:', getErrorMessage(err));
+    });
+
+    await new Promise((resolve, reject) => {
+        apiServer.once('listening', resolve);
+        apiServer.once('error', reject);
+        apiServer.listen(API_SERVER_PORT, API_SERVER_HOST);
+    });
+
+    apiServerStarted = true;
+
+    const address = apiServer.address();
+    const port = address && typeof address === 'object' ? address.port : API_SERVER_PORT;
+    console.log(`[+] Local API server listening on http://${API_SERVER_HOST}:${port}${API_BASE_PATH}`);
 }
 
 async function exposeFunctionIfNeeded(page, name, fn) {
@@ -522,18 +743,27 @@ function isBrowserConnected(browser) {
 
 async function connectBrowserWithRetry() {
     while (true) {
-        try {
-            const browser = await puppeteer.connect({
-                browserURL: DEBUG_URL,
-                defaultViewport: null
-            });
+        let lastError = null;
 
-            console.log('[+] Connected to debug browser');
-            return browser;
-        } catch (err) {
-            console.error('[WARN] Could not connect to debug browser. Retrying...', getErrorMessage(err));
-            await sleep(RECONNECT_INTERVAL_MS);
+        for (const debugHost of DEBUG_HOSTS) {
+            const debugUrl = `http://${debugHost}:${DEBUG_PORT}`;
+
+            try {
+                const browser = await puppeteer.connect({
+                    browserURL: debugUrl,
+                    defaultViewport: null
+                });
+
+                console.log(`[+] Connected to debug browser via ${debugUrl}`);
+                return browser;
+            } catch (err) {
+                lastError = err;
+            }
         }
+
+        console.error('[WARN] Could not connect to debug browser. Retrying...', getErrorMessage(lastError));
+
+        await sleep(RECONNECT_INTERVAL_MS);
     }
 }
 
@@ -558,7 +788,9 @@ function createContentHash(code) {
 
 async function main() {
     console.log('[*] Connecting to Electron app...');
-    console.log(`[*] Using debug URL: ${DEBUG_URL}`);
+    console.log(`[*] Using debug hosts: ${DEBUG_HOSTS.map((host) => `http://${host}:${DEBUG_PORT}`).join(', ')}`);
+
+    await startApiServer();
 
     let browser = await connectBrowserWithRetry();
     let page = null;
@@ -592,6 +824,7 @@ async function main() {
             }
 
             page = await ensureMainPage(browser, page);
+            currentApiPage = page;
 
             const pageInfo = await getPageInfo(page);
             const attachKey = `${pageInfo.title}|${pageInfo.url}`;

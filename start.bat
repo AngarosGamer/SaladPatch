@@ -341,10 +341,12 @@ if errorlevel 1 (
 	exit /b 1
 )
 
-powershell -NoProfile -ExecutionPolicy Bypass -Command "try { $r = Invoke-WebRequest -UseBasicParsing -Uri 'http://127.0.0.1:%DEBUG_PORT%/json/version' -TimeoutSec 2; if ($r.StatusCode -ge 200 -and $r.StatusCode -lt 500) { exit 0 } else { exit 1 } } catch { exit 1 }"
-if not errorlevel 1 (
-	echo [OK] Salad debug endpoint is reachable on port %DEBUG_PORT%
-	exit /b 0
+for %%H in (127.0.0.1 localhost) do (
+	curl.exe -sS --max-time 2 "http://%%H:%DEBUG_PORT%/json/version" >nul 2>nul
+	if not errorlevel 1 (
+		echo [OK] Salad debug endpoint is reachable on port %DEBUG_PORT% via %%H
+		exit /b 0
+	)
 )
 
 if %ATTEMPTS% GEQ %MAX_ATTEMPTS% (
@@ -360,8 +362,10 @@ if %ATTEMPTS% GEQ %MAX_ATTEMPTS% (
 if %ATTEMPTS% EQU 1 (
 	echo [INFO] Waiting for Salad debug endpoint...
 )
-if %ATTEMPTS% MOD 5 EQU 0 (
-	echo [INFO] Still waiting... (attempt %ATTEMPTS% of %MAX_ATTEMPTS%)
+
+set /a WAIT_REMAINDER=ATTEMPTS - ((ATTEMPTS / 5) * 5)
+if !WAIT_REMAINDER! EQU 0 (
+	echo [INFO] Still waiting... attempt %ATTEMPTS% of %MAX_ATTEMPTS%
 )
 
 timeout /t 2 /nobreak >nul

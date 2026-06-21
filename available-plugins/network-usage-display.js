@@ -587,6 +587,7 @@
     h.useInterval(() => {
         tick().catch(() => {});
     }, POLL_INTERVAL_MS);
+    
 
     // Register manual cleanup for global API patches
     // (This happens when plugin is removed/reloaded via createPlugin factory)

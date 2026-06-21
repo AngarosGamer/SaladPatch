@@ -6,6 +6,7 @@ This registry showcases official and community-created plugins and themes for Sa
 
 | Name | Description | Status | Repository |
 |------|-------------|--------|------------|
+| [api-extension](available-plugins/api-extension.js) | Publishes Salad app state through a local HTTP API | Official | This repo |
 | [workload-type-display](plugins/workload-type-display.js) | Displays the currently active workload type inline in the Salad UI | Official | This repo |
 | [network-usage-display](plugins/network-usage-display.js) | Shows live renderer upload/download rates and session transfer totals | Official | This repo |
 
@@ -54,6 +55,7 @@ Then read [CONTRIBUTING.md](CONTRIBUTING.md) and [PLUGIN_CHECKLIST.md](PLUGIN_CH
 
 ### Logging & Debugging
 - plugin-template-core-log — Log reading example
+- api-extension — Local Salad state API
 
 ### Themes
 - Catppuccin (4 variants) — Color schemes

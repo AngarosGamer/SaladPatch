@@ -42,6 +42,23 @@ The repository includes an Inno Setup installer configuration at `installer/Sala
 - `available-plugins/` and `available-themes/` are storage for optional scripts.
 - Core runtime code lives in `loader.js` and `core/`.
 
+## API Extension
+
+The repository includes an optional API extension at [available-plugins/api-extension.js](available-plugins/api-extension.js).
+
+Copy it into `plugins/` to enable a local HTTP endpoint that serves Salad state at `http://127.0.0.1:31337/api/v1/...`.
+
+Supported MVP endpoints:
+
+- `balance`
+- `predicted`
+- `history`
+- `status`
+- `state`
+- `degraded`
+
+When the Salad widget is hidden, the API serves the last known values and includes a disclaimer in the response. For live updates, keep the widget open or pinned.
+
 ## Authoring Rules
 - Put globally useful functionality in core and document it here.
 - Put plugin-specific behavior (parsing, UI changes for one feature) in that plugin file.
